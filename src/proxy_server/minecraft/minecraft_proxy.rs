@@ -27,49 +27,56 @@ pub(crate) async fn start_minecraft_proxy(
             let mut buf = vec![0; 16_384];
 
             loop {
-                let bytes_received = client
-                    .socket
-                    .read(&mut buf)
-                    .await
-                    .expect("failed to read data from socket");
+                let bytes_received = client.socket.read(&mut buf).await;
 
-                if bytes_received == 0 {
-                    return;
-                }
+                match bytes_received {
+                    Ok(bytes_received) => {
+                        if bytes_received == 0 {
+                            return;
+                        }
 
-                if client.is_handshaking() {
-                    let hostname = handshake_client(&buf.clone(), &mut client, bytes_received);
-                    if let Some(hostname) = hostname {
-                        let hosts = hosts.lock();
-                        let host = find_host_by_hostname(hosts, hostname.clone());
+                        if client.is_handshaking() {
+                            let hostname =
+                                handshake_client(&buf.clone(), &mut client, bytes_received);
+                            if let Some(hostname) = hostname {
+                                let hosts = hosts.lock();
+                                let host = find_host_by_hostname(hosts, hostname.clone());
 
-                        if let Some(server_addr) = host {
-                            info!(
-                                "minecraft:connection from {}:{} forwarded to {}",
-                                address.ip(),
-                                address.port(),
-                                server_addr,
-                            );
-                            match TcpStream::connect(server_addr.clone()).await {
-                                Ok(mut outbound) => {
-                                    let _ = outbound.write(&buf).await.map_err(|err| {
-                                        error!(
+                                if let Some(server_addr) = host {
+                                    info!(
+                                        "minecraft:connection from {}:{} forwarded to {}",
+                                        address.ip(),
+                                        address.port(),
+                                        server_addr,
+                                    );
+                                    match TcpStream::connect(server_addr.clone()).await {
+                                        Ok(mut outbound) => {
+                                            let _ = outbound.write(&buf).await.map_err(|err| {
+                                                error!(
                                             "Failed to write first packet to outbound; error={err}"
                                         );
-                                    });
-                                    let _ = copy_bidirectional(&mut client.socket, &mut outbound)
-                                        .await
-                                        .map_err(|err| {
-                                            error!("Failed to transfer; error={err}");
-                                        });
-                                }
-                                Err(err) => {
-                                    error!("Failed to transfer; error={err}")
+                                            });
+                                            let _ = copy_bidirectional(
+                                                &mut client.socket,
+                                                &mut outbound,
+                                            )
+                                            .await
+                                            .map_err(|err| {
+                                                error!("Failed to transfer; error={err}");
+                                            });
+                                        }
+                                        Err(err) => {
+                                            error!("Failed to transfer; error={err}")
+                                        }
+                                    }
+                                } else {
+                                    error!("Client trying to connect to unknown server host {hostname}");
                                 }
                             }
-                        } else {
-                            error!("Client trying to connect to unknown server host {hostname}");
                         }
+                    }
+                    Err(err) => {
+                        error!("Error while reading client socket: {err}")
                     }
                 }
             }

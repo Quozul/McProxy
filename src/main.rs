@@ -61,11 +61,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Servers::Minecraft { listen, hosts } => {
                     let hosts = Arc::new(Mutex::new(hosts));
                     tokio::spawn(async move {
-                        let _ = start_minecraft_proxy(listen, hosts).await;
+                        let proxy = start_minecraft_proxy(listen, hosts).await;
+                        if let Err(err) = proxy {
+                            error!("Error with Minecraft proxy: {err}");
+                        }
                     })
                 }
                 Servers::Tcp { listen, redirect } => tokio::spawn(async move {
-                    let _ = start_tcp_proxy(listen, redirect).await;
+                    let proxy = start_tcp_proxy(listen, redirect).await;
+                    if let Err(err) = proxy {
+                        error!("Error with Minecraft proxy: {err}");
+                    }
                 }),
             });
 
