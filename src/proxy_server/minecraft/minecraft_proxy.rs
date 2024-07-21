@@ -1,13 +1,13 @@
 use std::error::Error;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
-use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, error, info, warn};
 
-use crate::minecraft_protocol::parse_packet::{parse_minecraft_packet, Packet};
-use crate::proxy_server::client::Client;
-use crate::Host;
+use crate::configuration::Host;
+use crate::minecraft_protocol::parse_packet::{Packet, parse_minecraft_packet};
+use crate::proxy_server::minecraft::client::Client;
 
 pub(crate) async fn start_minecraft_proxy(
     addr: String,

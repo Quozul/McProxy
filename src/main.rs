@@ -1,56 +1,16 @@
 use std::error::Error;
-use std::fs::File;
-use std::io::Read;
-use std::process::exit;
 use std::sync::{Arc, Mutex};
 
 use clap::Parser;
-use serde::Deserialize;
 use tracing::{error, Level};
 
-use crate::proxy_server::minecraft_proxy::start_minecraft_proxy;
+use proxy_server::minecraft::minecraft_proxy::start_minecraft_proxy;
 
+use crate::configuration::{read_config, Servers};
+
+mod configuration;
 mod minecraft_protocol;
 mod proxy_server;
-
-#[derive(Deserialize, Debug, Clone)]
-struct Host {
-    hostname: String,
-    target: String,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(untagged)]
-enum Servers {
-    Minecraft { listen: String, hosts: Vec<Host> },
-}
-
-#[derive(Deserialize, Debug)]
-struct Config {
-    servers: Vec<Servers>,
-}
-
-fn read_config(config_file_name: String) -> Option<Config> {
-    let file = File::open(&config_file_name);
-    if let Ok(mut file) = file {
-        let mut contents = String::new();
-        if file.read_to_string(&mut contents).is_ok() {
-            match toml::from_str::<Config>(&contents) {
-                Ok(config) => Some(config),
-                Err(err) => {
-                    error!("Cannot parse configuration file '{config_file_name}': {err}");
-                    None
-                }
-            }
-        } else {
-            error!("Cannot read configuration file '{config_file_name}'");
-            None
-        }
-    } else {
-        error!("Cannot find configuration file '{config_file_name}'");
-        None
-    }
-}
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -70,10 +30,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = read_config(args.config);
 
     match config {
-        None => {
-            exit(1);
-        }
-        Some(config) => {
+        Ok(config) => {
             for server in config.servers {
                 match server {
                     Servers::Minecraft { listen, hosts } => {
@@ -83,6 +40,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
             }
+        }
+        Err(err) => {
+            error!("Error while reading configuration: {err}");
         }
     }
 

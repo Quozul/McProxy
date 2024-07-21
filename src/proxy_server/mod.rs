@@ -1,2 +1,1 @@
-mod client;
-pub(crate) mod minecraft_proxy;
+pub(crate) mod minecraft;
