@@ -44,6 +44,12 @@ pub(crate) async fn start_minecraft_proxy(
                         let host = find_host_by_hostname(hosts, hostname.clone());
 
                         if let Some(server_addr) = host {
+                            info!(
+                                "minecraft:connection from {}:{} forwarded to {}",
+                                address.ip(),
+                                address.port(),
+                                server_addr,
+                            );
                             match TcpStream::connect(server_addr.clone()).await {
                                 Ok(mut outbound) => {
                                     let _ = outbound.write(&buf).await.map_err(|err| {

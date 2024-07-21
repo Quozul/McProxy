@@ -11,7 +11,14 @@ pub(crate) async fn start_tcp_proxy(
     let listener = TcpListener::bind(&listen_address).await?;
     info!("Listening on: {}", listen_address);
 
-    while let Ok((mut inbound, _)) = listener.accept().await {
+    while let Ok((mut inbound, address)) = listener.accept().await {
+        info!(
+            "tcp:connection from {}:{} forwarded to {}",
+            address.ip(),
+            address.port(),
+            server_address,
+        );
+
         let mut outbound = TcpStream::connect(server_address.clone()).await?;
 
         tokio::spawn(async move {
