@@ -1,0 +1,6 @@
+[[servers]]
+listen = "127.0.0.1:25565"
+hosts = [
+    { hostname = "localhost", target = "127.0.0.1:25566" },
+    { hostname = "localhost.localdomain", target = "127.0.0.1:25567" },
+]

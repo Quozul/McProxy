@@ -1,0 +1,12 @@
+[package]
+name = "McProxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.9", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.38", features = ["full"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = "0.3"
