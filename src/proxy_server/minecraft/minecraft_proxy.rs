@@ -1,12 +1,12 @@
 use std::error::Error;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional};
+use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::configuration::Host;
-use crate::minecraft_protocol::parse_packet::{Packet, parse_minecraft_packet};
+use crate::minecraft_protocol::parse_packet::{parse_minecraft_packet, Packet};
 use crate::proxy_server::minecraft::client::Client;
 
 pub(crate) async fn start_minecraft_proxy(
@@ -27,18 +27,18 @@ pub(crate) async fn start_minecraft_proxy(
             let mut buf = vec![0; 16_384];
 
             loop {
-                let n = client
+                let bytes_received = client
                     .socket
                     .read(&mut buf)
                     .await
                     .expect("failed to read data from socket");
 
-                if n == 0 {
+                if bytes_received == 0 {
                     return;
                 }
 
                 if client.is_handshaking() {
-                    let hostname = handshake_client(&buf.clone(), &mut client);
+                    let hostname = handshake_client(&buf.clone(), &mut client, bytes_received);
                     if let Some(hostname) = hostname {
                         let hosts = hosts.lock();
                         let host = find_host_by_hostname(hosts, hostname.clone());
@@ -98,8 +98,15 @@ fn find_host_by_hostname(
     None
 }
 
-fn handshake_client(buf: &[u8], client: &mut Client) -> Option<String> {
-    let packet = parse_minecraft_packet(buf);
+fn handshake_client(bytes: &[u8], client: &mut Client, bytes_received: usize) -> Option<String> {
+    let full_packet = bytes[..bytes_received]
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<Vec<_>>()
+        .join(" ");
+    trace!("Received packet: {full_packet}");
+
+    let packet = parse_minecraft_packet(bytes);
 
     match packet {
         Ok(packet) => match packet {

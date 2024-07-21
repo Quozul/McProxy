@@ -12,7 +12,7 @@ pub(crate) struct UnknownPacketError {
 
 impl fmt::Display for UnknownPacketError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Unknown packet ID {}", self.packet_id)
+        write!(f, "Unknown packet ID {:#04x}", self.packet_id)
     }
 }
 
@@ -96,9 +96,9 @@ mod tests {
 
     #[test]
     fn should_return_error_for_unknown_packet() {
-        let mut unknown_packet = vec![0x02, 0x01];
+        let unknown_packet = vec![0x02, 0x01];
 
-        let result = parse_minecraft_packet(&mut unknown_packet);
+        let result = parse_minecraft_packet(&unknown_packet);
 
         match result {
             Err(e) => {

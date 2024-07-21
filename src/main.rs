@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use tracing::{error, Level};
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 use proxy_server::minecraft::minecraft_proxy::start_minecraft_proxy;
 
