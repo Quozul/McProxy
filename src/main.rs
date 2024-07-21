@@ -7,6 +7,7 @@ use tracing::{error, Level};
 use proxy_server::minecraft::minecraft_proxy::start_minecraft_proxy;
 
 use crate::configuration::{read_config, Servers};
+use crate::proxy_server::tcp::tcp_proxy::start_tcp_proxy;
 
 mod configuration;
 mod minecraft_protocol;
@@ -22,7 +23,7 @@ struct Cli {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     let subscriber = tracing_subscriber::fmt()
-        .with_max_level(Level::ERROR)
+        .with_max_level(Level::DEBUG)
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
@@ -31,15 +32,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     match config {
         Ok(config) => {
-            for server in config.servers {
-                match server {
-                    Servers::Minecraft { listen, hosts } => {
-                        // FIXME: Allow concurrent start of multiple servers
-                        let hosts = Arc::new(Mutex::new(hosts));
-                        start_minecraft_proxy(listen, hosts).await?;
-                    }
+            let servers = config.servers.iter().cloned().map(|server| match server {
+                Servers::Minecraft { listen, hosts } => {
+                    let hosts = Arc::new(Mutex::new(hosts));
+                    tokio::spawn(async move {
+                        let _ = start_minecraft_proxy(listen, hosts).await;
+                    })
                 }
-            }
+                Servers::Tcp { listen, redirect } => tokio::spawn(async move {
+                    let _ = start_tcp_proxy(listen, redirect).await;
+                }),
+            });
+
+            futures::future::join_all(servers).await;
         }
         Err(err) => {
             error!("Error while reading configuration: {err}");

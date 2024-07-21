@@ -12,13 +12,14 @@ pub(crate) struct Host {
     pub(crate) target: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub(crate) enum Servers {
     Minecraft { listen: String, hosts: Vec<Host> },
+    Tcp { listen: String, redirect: String },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub(crate) struct Config {
     pub(crate) servers: Vec<Servers>,
 }
