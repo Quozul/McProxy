@@ -71,6 +71,7 @@ pub(crate) async fn start_minecraft_proxy(
                                     }
                                 } else {
                                     error!("Client trying to connect to unknown server host {hostname}");
+                                    return;
                                 }
                             }
                         }
