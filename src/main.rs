@@ -25,7 +25,7 @@ struct Cli {
     config: String,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
 
@@ -37,18 +37,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let registry = tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env().add_directive(log_level.into()));
+        .with(EnvFilter::from_default_env().add_directive(log_level.into()))
+        .with(tracing_subscriber::fmt::layer().with_target(false));
 
     match tracing_journald::layer() {
         Ok(layer) => {
-            let fmt_layer = tracing_subscriber::fmt::layer().with_target(false);
-            registry.with(fmt_layer).with(layer).init();
+            registry.with(layer).init();
         }
         // journald is typically available on Linux systems, but nowhere else. Portable software
         // should handle its absence gracefully.
         Err(e) => {
-            let fmt_layer = tracing_subscriber::fmt::layer().with_target(false);
-            registry.with(fmt_layer).init();
+            registry.init();
             error!("couldn't connect to journald: {}", e);
         }
     }
@@ -68,7 +67,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     })
                 }
                 Servers::Tcp { listen, redirect } => tokio::spawn(async move {
-                    let proxy = start_tcp_proxy(listen, redirect).await;
+                    let proxy = start_tcp_proxy(&listen, &redirect).await;
                     if let Err(err) = proxy {
                         error!("Error with Minecraft proxy: {err}");
                     }

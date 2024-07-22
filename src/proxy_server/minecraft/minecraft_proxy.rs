@@ -1,13 +1,13 @@
 use std::error::Error;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
-use tokio::io::{copy_bidirectional, AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::configuration::Host;
 use crate::minecraft_protocol::parse_packet::{parse_minecraft_packet, Packet};
 use crate::proxy_server::minecraft::client::Client;
+use crate::proxy_server::proxy_connection::proxy_connection;
 
 pub(crate) async fn start_minecraft_proxy(
     addr: String,
@@ -20,65 +20,35 @@ pub(crate) async fn start_minecraft_proxy(
         let (socket, address) = listener.accept().await?;
         debug!("Accepted new client {}:{}", address.ip(), address.port());
         let mut client = Client::new(socket);
-
         let hosts = Arc::clone(&hosts);
 
         tokio::spawn(async move {
             let mut buf = vec![0; 16_384];
 
-            loop {
-                let bytes_received = client.socket.read(&mut buf).await;
+            let bytes_received = client.socket.peek(&mut buf).await.unwrap_or_else(|err| {
+                error!("Failed to read; error={err}");
+                0
+            });
 
-                match bytes_received {
-                    Ok(bytes_received) => {
-                        if bytes_received == 0 {
-                            return;
-                        }
+            if bytes_received == 0 {
+                error!("No bytes received from socket");
+                return;
+            }
 
-                        if client.is_handshaking() {
-                            let hostname =
-                                handshake_client(&buf.clone(), &mut client, bytes_received);
-                            if let Some(hostname) = hostname {
-                                let hosts = hosts.lock();
-                                let host = find_host_by_hostname(hosts, hostname.clone());
+            if !client.is_handshaking() {
+                error!("The client is not in an handshaking state");
+                return;
+            }
 
-                                if let Some(server_addr) = host {
-                                    info!(
-                                        "minecraft:connection from {}:{} forwarded to {}",
-                                        address.ip(),
-                                        address.port(),
-                                        server_addr,
-                                    );
-                                    match TcpStream::connect(server_addr.clone()).await {
-                                        Ok(mut outbound) => {
-                                            let _ = outbound.write(&buf).await.map_err(|err| {
-                                                error!(
-                                            "Failed to write first packet to outbound; error={err}"
-                                        );
-                                            });
-                                            let _ = copy_bidirectional(
-                                                &mut client.socket,
-                                                &mut outbound,
-                                            )
-                                            .await
-                                            .map_err(|err| {
-                                                error!("Failed to transfer; error={err}");
-                                            });
-                                        }
-                                        Err(err) => {
-                                            error!("Failed to transfer; error={err}")
-                                        }
-                                    }
-                                } else {
-                                    error!("Client trying to connect to unknown server host {hostname}");
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        error!("Error while reading client socket: {err}")
-                    }
+            let hostname = handshake_client(&buf.clone(), &mut client, bytes_received);
+            if let Some(hostname) = hostname {
+                let hosts = hosts.lock();
+                let host = find_host_by_hostname(hosts, hostname.clone());
+
+                if let Some(server_addr) = host {
+                    proxy_connection("minecraft", client.socket, address, &server_addr).await;
+                } else {
+                    error!("Client trying to connect to unknown server host {hostname}");
                 }
             }
         });

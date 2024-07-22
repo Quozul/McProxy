@@ -1,6 +1,6 @@
 # Proxy
 
-> Some description…
+> A proxy written in Rust to redirect incoming trafic from one host to another.
 
 ## Configuration
 
@@ -19,29 +19,33 @@ listen = "127.0.0.1:8080"
 redirect = "127.0.0.1:80"
 ```
 
-## Use with Systemd
+## Installation using Systemd
 
-### Create the unit file
+1. Create a new unit file: `/etc/systemd/system/proxy.service`
+   ```
+   [Unit]
+   Description=Proxy
+   After=network.target
 
-```
-[Unit]
-Description=Proxy
-After=network.target
+   [Service]
+   WorkingDirectory=/path/to
+   ExecStart=/path/to/proxy
+   Restart=always
+   StandardOutput=null
+   StandardError=null
 
-[Service]
-WorkingDirectory=/path/to
-ExecStart=/path/to/proxy
-Restart=always
-StandardOutput=null
-StandardError=null
-SyslogIdentifier=proxy
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### View the logs
-
-```shell
-journalctl --follow --user-unit=proxy
-```
+   [Install]
+   WantedBy=multi-user.target
+   ```
+2. Reload the daemon:
+   ```shell
+   sudo systemctl daemon-reload
+   ```
+3. Enable and start the service:
+   ```shell
+   sudo systemctl enable --now proxy
+   ```
+4. Read the logs:
+   ```shell
+   journalctl --follow --unit=proxy
+   ```
