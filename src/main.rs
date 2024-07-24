@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     })
                 }
                 Servers::Tcp { listen, redirect } => tokio::spawn(async move {
-                    let proxy = start_tcp_proxy(&listen, &redirect).await;
+                    let proxy = start_tcp_proxy(&listen, redirect).await;
                     if let Err(err) = proxy {
                         error!("Error with Minecraft proxy: {err}");
                     }

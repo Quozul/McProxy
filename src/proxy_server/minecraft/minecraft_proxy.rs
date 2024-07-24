@@ -82,7 +82,7 @@ fn handshake_client(bytes: &[u8], client: &mut Client, bytes_received: usize) ->
         .map(|b| format!("{:02x}", b))
         .collect::<Vec<_>>()
         .join(" ");
-    trace!("Received packet: {full_packet}");
+    trace!("Received packet({bytes_received}): {full_packet}");
 
     let packet = parse_minecraft_packet(bytes);
 
