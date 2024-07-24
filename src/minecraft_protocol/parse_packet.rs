@@ -1,9 +1,9 @@
-use std::error::Error;
-use std::fmt;
-
 use crate::minecraft_protocol::data_types::var_int::{read_var_int, InvalidVarIntError};
 use crate::minecraft_protocol::packets::handshaking::handle_handshake;
 use crate::minecraft_protocol::state::{State, UnknownStateError};
+use std::error::Error;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub(crate) struct UnknownPacketError {
@@ -25,6 +25,26 @@ pub(crate) enum Packet {
         port: u16,
         next_state: State,
     },
+}
+
+impl Display for Packet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Packet::Handshake {
+                protocol,
+                hostname,
+                port,
+                next_state,
+            } => f.write_fmt(format_args!(
+                "handshake[protocol_version: {}, hostname({}): '{}:{}', next_state: {}]",
+                protocol,
+                hostname.len(),
+                hostname,
+                port,
+                next_state,
+            )),
+        }
+    }
 }
 
 pub(crate) struct PacketLengthResult {

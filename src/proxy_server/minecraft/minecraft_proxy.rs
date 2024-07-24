@@ -59,6 +59,7 @@ pub(crate) async fn start_minecraft_proxy(
 
             let hostname =
                 handshake_client(payload.get_data(), payload.get_packet_size(), &mut client);
+
             if let Some(hostname) = hostname {
                 let hosts = hosts.lock();
                 let host = find_host_by_hostname(hosts, hostname.clone());
@@ -73,7 +74,7 @@ pub(crate) async fn start_minecraft_proxy(
                     )
                     .await;
                 } else {
-                    error!("Client trying to connect to unknown server host {hostname}");
+                    warn!("Client trying to connect to unknown server host {hostname}");
                 }
             }
         });
@@ -119,25 +120,20 @@ fn handshake_client(bytes: &[u8], length: usize, client: &mut Client) -> Option<
     let packet = parse_minecraft_packet(bytes);
 
     match packet {
-        Ok(packet) => match packet {
-            Packet::Handshake {
-                protocol,
-                hostname,
-                port,
-                next_state,
-            } => {
-                debug!(
-                    "Received handshake with protocol version: {} for hostname({}): {}:{}",
-                    protocol,
-                    hostname.len(),
-                    hostname,
-                    port,
-                );
+        Ok(packet) => {
+            debug!("Received {}", packet);
 
-                client.update_state(next_state);
-                Some(hostname)
+            match packet {
+                Packet::Handshake {
+                    hostname,
+                    next_state,
+                    ..
+                } => {
+                    client.update_state(next_state);
+                    Some(hostname)
+                }
             }
-        },
+        }
         Err(err) => {
             warn!("Could not parse Minecraft packet: {err}");
             None
