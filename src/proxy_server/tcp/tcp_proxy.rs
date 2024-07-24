@@ -11,10 +11,10 @@ pub(crate) async fn start_tcp_proxy(
     let listener = TcpListener::bind(&listen_address).await?;
     info!("Listening on: {}", listen_address);
 
-    while let Ok((inbound, address)) = listener.accept().await {
+    while let Ok((mut inbound, address)) = listener.accept().await {
         let server_address = server_address.clone();
         tokio::spawn(async move {
-            proxy_connection("tcp", inbound, address, &server_address).await;
+            proxy_connection("tcp", &mut inbound, address, &server_address, None).await;
         });
     }
 

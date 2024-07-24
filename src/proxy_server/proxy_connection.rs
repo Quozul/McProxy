@@ -1,13 +1,14 @@
 use std::net::SocketAddr;
-use tokio::io::copy_bidirectional;
+use tokio::io::{copy_bidirectional, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{error, info};
 
 pub(crate) async fn proxy_connection(
     protocol: &str,
-    mut inbound: TcpStream,
+    inbound: &mut TcpStream,
     inbound_address: SocketAddr,
     server_addr: &str,
+    initial_bytes: Option<&[u8]>,
 ) {
     info!(
         "{}:connection from {}:{} forwarded to {}",
@@ -18,7 +19,10 @@ pub(crate) async fn proxy_connection(
     );
     match TcpStream::connect(server_addr).await {
         Ok(mut outbound) => {
-            let _ = copy_bidirectional(&mut inbound, &mut outbound)
+            if let Some(initial_bytes) = initial_bytes {
+                let _ = outbound.write(initial_bytes).await;
+            }
+            let _ = copy_bidirectional(inbound, &mut outbound)
                 .await
                 .map_err(|err| {
                     error!("Failed to transfer; error={err}");

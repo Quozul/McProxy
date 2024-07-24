@@ -5,21 +5,25 @@ pub(crate) const SEGMENT_BITS: u8 = 0x7F;
 pub(crate) const CONTINUE_BIT: u8 = 0x80;
 
 #[derive(Debug)]
-pub(crate) struct VarIntTooBigError;
+pub(crate) struct InvalidVarIntError;
 
-impl fmt::Display for VarIntTooBigError {
+impl fmt::Display for InvalidVarIntError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "VarInt is too big")
+        write!(f, "VarInt is invalid")
     }
 }
 
-impl Error for VarIntTooBigError {}
+impl Error for InvalidVarIntError {}
 
-pub(crate) fn read_var_int(bytes: &[u8], index: &mut usize) -> Result<i32, VarIntTooBigError> {
+pub(crate) fn read_var_int(bytes: &[u8], index: &mut usize) -> Result<i32, InvalidVarIntError> {
     let mut value = 0;
     let mut position = 0;
 
     while position < 32 {
+        if *index >= bytes.len() {
+            return Err(InvalidVarIntError);
+        }
+
         let current_byte = bytes[*index];
         value |= ((current_byte & SEGMENT_BITS) as i32) << position;
 
@@ -32,7 +36,7 @@ pub(crate) fn read_var_int(bytes: &[u8], index: &mut usize) -> Result<i32, VarIn
     }
 
     if position >= 32 {
-        return Err(VarIntTooBigError);
+        return Err(InvalidVarIntError);
     }
 
     Ok(value)

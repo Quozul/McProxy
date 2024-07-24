@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use crate::minecraft_protocol::data_types::var_int::read_var_int;
+use crate::minecraft_protocol::data_types::var_int::{read_var_int, InvalidVarIntError};
 use crate::minecraft_protocol::packets::handshaking::handle_handshake;
 use crate::minecraft_protocol::state::{State, UnknownStateError};
 
@@ -27,11 +27,23 @@ pub(crate) enum Packet {
     },
 }
 
+pub(crate) struct PacketLengthResult {
+    pub(crate) packet_start_index: usize,
+    pub(crate) packet_length: usize,
+}
+
+pub(crate) fn get_packet_length(bytes: &[u8]) -> Result<PacketLengthResult, InvalidVarIntError> {
+    let mut packet_start_index = 0;
+    let packet_length = read_var_int(bytes, &mut packet_start_index)? as usize; // TODO: Handle invalid lengths with unit tests
+    Ok(PacketLengthResult {
+        packet_length,
+        packet_start_index,
+    })
+}
+
 pub(crate) fn parse_minecraft_packet(bytes: &[u8]) -> Result<Packet, Box<dyn Error>> {
-    let mut index = 0;
-    read_var_int(bytes, &mut index)?; // We don't need the length for now
-    let packet_id = bytes[index];
-    index += 1;
+    let packet_id = bytes[0];
+    let mut index = 1;
 
     let packet = match packet_id {
         0x00 => {
@@ -59,26 +71,21 @@ pub(crate) fn parse_minecraft_packet(bytes: &[u8]) -> Result<Packet, Box<dyn Err
 
 #[cfg(test)]
 mod tests {
-    use tracing::Level;
-
     use super::*;
 
     #[test]
     fn should_parse_handshake() {
-        let subscriber = tracing_subscriber::fmt()
-            .with_max_level(Level::TRACE)
-            .finish();
-        tracing::subscriber::set_global_default(subscriber).unwrap();
-
+        // Given
         let localhost_handshake_packet = vec![
-            0x10, // Packet length (16, including packet ID)
             0x00, // Packet ID
             0xff, // Packet start
             0x05, 0x09, 0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x68, 0x6f, 0x73, 0x74, 0x63, 0xdd, 0x01,
         ];
 
+        // When
         let handshake = parse_minecraft_packet(&localhost_handshake_packet).unwrap();
 
+        // Then
         match handshake {
             Packet::Handshake {
                 protocol,
@@ -96,14 +103,17 @@ mod tests {
 
     #[test]
     fn should_return_error_for_unknown_packet() {
+        // Given
         let unknown_packet = vec![0x02, 0x01];
 
+        // When
         let result = parse_minecraft_packet(&unknown_packet);
 
+        // Then
         match result {
             Err(e) => {
                 let unknown_packet_error = e.downcast_ref::<UnknownPacketError>().unwrap();
-                assert_eq!(unknown_packet_error.packet_id, 0x01);
+                assert_eq!(unknown_packet_error.packet_id, 0x02);
             }
             Ok(_) => panic!("Expected an error but got a packet"),
         }
