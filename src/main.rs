@@ -1,17 +1,18 @@
+use std::collections::HashMap;
 use std::error::Error;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use clap::Parser;
-use tracing::{error, Level};
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
+use tracing::error;
 
 use proxy_server::minecraft::minecraft_proxy::start_minecraft_proxy;
 
 use crate::configuration::{read_config, Servers};
+use crate::logging::enable_logging;
 use crate::proxy_server::tcp::tcp_proxy::start_tcp_proxy;
 
 mod configuration;
+mod logging;
 mod minecraft_protocol;
 mod proxy_server;
 
@@ -28,29 +29,7 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
-
-    let log_level = match args.verbose {
-        0 => Level::INFO,
-        1 => Level::DEBUG,
-        2 => Level::TRACE,
-        _ => Level::TRACE,
-    };
-
-    let registry = tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env().add_directive(log_level.into()))
-        .with(tracing_subscriber::fmt::layer().with_target(false));
-
-    match tracing_journald::layer() {
-        Ok(layer) => {
-            registry.with(layer).init();
-        }
-        // journald is typically available on Linux systems, but nowhere else. Portable software
-        // should handle its absence gracefully.
-        Err(e) => {
-            registry.init();
-            error!("couldn't connect to journald: {}", e);
-        }
-    }
+    enable_logging(args.verbose);
 
     let config = read_config(args.config);
 
@@ -58,9 +37,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Ok(config) => {
             let servers = config.servers.iter().cloned().map(|server| match server {
                 Servers::Minecraft { listen, hosts } => {
-                    let hosts = Arc::new(Mutex::new(hosts));
+                    let hosts = hosts
+                        .into_iter()
+                        .map(|host| (host.hostname, host.target))
+                        .collect::<HashMap<String, String>>();
                     tokio::spawn(async move {
-                        let proxy = start_minecraft_proxy(listen, hosts).await;
+                        let proxy = start_minecraft_proxy(listen, Arc::new(hosts)).await;
                         if let Err(err) = proxy {
                             error!("Error with Minecraft proxy: {err}");
                         }

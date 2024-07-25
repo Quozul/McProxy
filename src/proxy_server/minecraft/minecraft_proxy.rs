@@ -1,145 +1,36 @@
+use std::collections::HashMap;
 use std::error::Error;
-use std::sync::{Arc, LockResult, Mutex, MutexGuard};
-use tokio::io::AsyncReadExt;
+use std::sync::Arc;
 use tokio::net::TcpListener;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info};
 
-use crate::configuration::Host;
-use crate::minecraft_protocol::parse_packet::{parse_minecraft_packet, Packet};
 use crate::proxy_server::minecraft::client::Client;
-use crate::proxy_server::minecraft::payload::Payload;
-use crate::proxy_server::proxy_connection::proxy_connection;
 
 pub(crate) async fn start_minecraft_proxy(
     addr: String,
-    hosts: Arc<Mutex<Vec<Host>>>,
+    hosts: Arc<HashMap<String, String>>,
 ) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(&addr).await?;
     info!("Listening on: {}", addr);
 
-    loop {
-        let (socket, address) = listener.accept().await?;
+    while let Ok((inbound, address)) = listener.accept().await {
         debug!("Accepted new client {}:{}", address.ip(), address.port());
-        let mut client = Client::new(socket);
-        let hosts = Arc::clone(&hosts);
+        let mut client = Client::new(inbound, address);
+        let hosts_ref = Arc::clone(&hosts);
 
         tokio::spawn(async move {
-            let mut payload = Payload::new();
-
             loop {
-                let mut buf = vec![0; payload.get_remaining_to_read()];
+                client.read_socket().await;
 
-                let bytes_received = client.socket.read(&mut buf).await.unwrap_or_else(|err| {
-                    error!("Failed to read; error={err}");
-                    0
-                });
-                trace!(
-                    "Received raw buffer({}): {}",
-                    bytes_received,
-                    print_bytes_hex(&buf.clone(), bytes_received)
-                );
-
-                if bytes_received == 0 {
-                    error!("No bytes received from socket");
-                    return;
-                }
-
-                if !client.is_handshaking() {
-                    error!("The client is not in an handshaking state");
-                    return;
-                }
-
-                if let Err(err) = payload.append_bytes(&buf[..bytes_received], bytes_received) {
-                    error!("Invalid packet; error={err}");
-                    return;
-                }
-
-                // Once the payload is complete, we can break the loop to parce the packet
-                if payload.is_complete() {
+                // Once the payload is complete, we can break the loop to parse the packet
+                if client.is_complete() {
                     break;
                 }
             }
 
-            let hostname =
-                handshake_client(payload.get_data(), payload.get_packet_size(), &mut client);
-
-            if let Some(hostname) = hostname {
-                let hosts = hosts.lock();
-                let host = find_host_by_hostname(hosts, hostname.clone());
-
-                if let Some(server_addr) = host {
-                    proxy_connection(
-                        "minecraft",
-                        &mut client.socket,
-                        address,
-                        &server_addr,
-                        Some(payload.get_all_bytes()),
-                    )
-                    .await;
-                } else {
-                    warn!("Client trying to connect to unknown server host {hostname}");
-                }
-            }
+            client.redirect_trafic(hosts_ref).await;
         });
     }
-}
 
-fn find_host_by_hostname(
-    hosts: LockResult<MutexGuard<Vec<Host>>>,
-    hostname: String,
-) -> Option<String> {
-    let hosts = match hosts {
-        Ok(guard) => guard,
-        Err(e) => {
-            error!("Failed to acquire lock: {}", e);
-            return None;
-        }
-    };
-
-    for host in &*hosts {
-        if host.hostname == hostname {
-            return Some(host.target.clone());
-        }
-    }
-
-    None
-}
-
-pub(crate) fn print_bytes_hex(bytes: &[u8], length: usize) -> String {
-    bytes[..length]
-        .iter()
-        .map(|b| format!("{:02x}", b))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn handshake_client(bytes: &[u8], length: usize, client: &mut Client) -> Option<String> {
-    trace!(
-        "Received packet({}) to decode: {}",
-        length,
-        print_bytes_hex(bytes, length)
-    );
-
-    let packet = parse_minecraft_packet(bytes);
-
-    match packet {
-        Ok(packet) => {
-            debug!("Received {}", packet);
-
-            match packet {
-                Packet::Handshake {
-                    hostname,
-                    next_state,
-                    ..
-                } => {
-                    client.update_state(next_state);
-                    Some(hostname)
-                }
-            }
-        }
-        Err(err) => {
-            warn!("Could not parse Minecraft packet: {err}");
-            None
-        }
-    }
+    Ok(())
 }
