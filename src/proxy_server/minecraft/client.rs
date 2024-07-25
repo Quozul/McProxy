@@ -1,10 +1,11 @@
 use crate::minecraft_protocol::parse_packet::{parse_minecraft_packet, Packet};
 use crate::minecraft_protocol::state::State;
-use crate::proxy_server::minecraft::payload::Payload;
+use crate::proxy_server::minecraft::payload::{Payload, PayloadAppendError};
 use crate::proxy_server::proxy_connection::proxy_connection;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tracing::{debug, error, trace, warn};
@@ -14,6 +15,18 @@ pub(crate) struct Client {
     state: State,
     payload: Payload,
     address: SocketAddr,
+}
+
+#[derive(Error, Debug)]
+pub(crate) enum ClientReadError {
+    #[error("invalid packet received {0}")]
+    InvalidPacket(PayloadAppendError),
+    #[error("the client is not in an handshaking state")]
+    NotInHandshakingState,
+    #[error("no bytes received from the client")]
+    NoBytesReceived,
+    #[error("failed to read socket")]
+    FailedToRead,
 }
 
 impl Client {
@@ -34,17 +47,17 @@ impl Client {
         self.state == State::Handshake
     }
 
-    pub(crate) async fn read_socket(&mut self) {
+    pub(crate) async fn read_socket(&mut self) -> Result<(), ClientReadError> {
         let mut buf = vec![0; self.payload.get_remaining_to_read()];
 
-        let bytes_received = self.socket.read(&mut buf).await.unwrap_or_else(|err| {
-            error!("Failed to read; error={err}");
-            0
-        });
+        let bytes_received = self
+            .socket
+            .read(&mut buf)
+            .await
+            .map_err(|_| ClientReadError::FailedToRead)?;
 
         if bytes_received == 0 {
-            error!("No bytes received from socket");
-            return;
+            return Err(ClientReadError::NoBytesReceived);
         }
 
         trace!(
@@ -54,16 +67,17 @@ impl Client {
         );
 
         if !self.is_handshaking() {
-            error!("The client is not in an handshaking state");
-            return;
+            return Err(ClientReadError::NotInHandshakingState);
         }
 
         if let Err(err) = self
             .payload
             .append_bytes(&buf[..bytes_received], bytes_received)
         {
-            error!("Invalid packet; error={err}");
+            return Err(ClientReadError::InvalidPacket(err));
         }
+
+        Ok(())
     }
 
     pub(crate) fn is_complete(&self) -> bool {

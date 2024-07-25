@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::proxy_server::minecraft::client::Client;
 
@@ -20,7 +20,10 @@ pub(crate) async fn start_minecraft_proxy(
 
         tokio::spawn(async move {
             loop {
-                client.read_socket().await;
+                if let Err(err) = client.read_socket().await {
+                    error!("{err}");
+                    return;
+                }
 
                 // Once the payload is complete, we can break the loop to parse the packet
                 if client.is_complete() {
