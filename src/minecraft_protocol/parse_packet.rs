@@ -1,22 +1,12 @@
-use crate::minecraft_protocol::data_types::var_int::{read_var_int, InvalidVarIntError};
 use crate::minecraft_protocol::packets::handshaking::handle_handshake;
 use crate::minecraft_protocol::state::{State, UnknownStateError};
-use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use thiserror::Error;
 
-#[derive(Debug)]
-pub(crate) struct UnknownPacketError {
-    packet_id: u8,
-}
-
-impl fmt::Display for UnknownPacketError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Unknown packet ID {:#04x}", self.packet_id)
-    }
-}
-
-impl Error for UnknownPacketError {}
+#[derive(Error, Debug)]
+#[error("unknown packet id {0:#04x}")]
+pub(crate) struct UnknownPacketError(u8);
 
 pub(crate) enum Packet {
     Handshake {
@@ -47,21 +37,7 @@ impl Display for Packet {
     }
 }
 
-pub(crate) struct PacketLengthResult {
-    pub(crate) packet_start_index: usize,
-    pub(crate) packet_length: usize,
-}
-
-pub(crate) fn get_packet_length(bytes: &[u8]) -> Result<PacketLengthResult, InvalidVarIntError> {
-    let mut packet_start_index = 0;
-    let packet_length = read_var_int(bytes, &mut packet_start_index)? as usize; // TODO: Handle invalid lengths with unit tests
-    Ok(PacketLengthResult {
-        packet_length,
-        packet_start_index,
-    })
-}
-
-pub(crate) fn parse_minecraft_packet(bytes: &[u8]) -> Result<Packet, Box<dyn Error>> {
+pub(crate) fn parse_minecraft_packet(bytes: &[u8]) -> Result<Packet, Box<dyn std::error::Error>> {
     let packet_id = bytes[0];
     let mut index = 1;
 
@@ -83,7 +59,7 @@ pub(crate) fn parse_minecraft_packet(bytes: &[u8]) -> Result<Packet, Box<dyn Err
                 next_state,
             })
         }
-        _ => Err(UnknownPacketError { packet_id }),
+        _ => Err(UnknownPacketError(packet_id)),
     };
 
     Ok(packet?)
@@ -133,7 +109,7 @@ mod tests {
         match result {
             Err(e) => {
                 let unknown_packet_error = e.downcast_ref::<UnknownPacketError>().unwrap();
-                assert_eq!(unknown_packet_error.packet_id, 0x02);
+                assert_eq!(unknown_packet_error.0, 0x02);
             }
             Ok(_) => panic!("Expected an error but got a packet"),
         }

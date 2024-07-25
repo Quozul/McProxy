@@ -1,17 +1,10 @@
-use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("unknown state")]
 pub(crate) struct UnknownStateError;
-
-impl fmt::Display for UnknownStateError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Unknown state")
-    }
-}
-
-impl Error for UnknownStateError {}
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum State {

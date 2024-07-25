@@ -49,7 +49,10 @@ pub(crate) async fn start_minecraft_proxy(
                     return;
                 }
 
-                payload.append_bytes(&buf[..bytes_received], bytes_received);
+                if let Err(err) = payload.append_bytes(&buf[..bytes_received], bytes_received) {
+                    error!("Invalid packet; error={err}");
+                    return;
+                }
 
                 // Once the payload is complete, we can break the loop to parce the packet
                 if payload.is_complete() {

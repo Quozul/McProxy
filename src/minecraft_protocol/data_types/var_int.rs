@@ -1,19 +1,15 @@
-use std::error::Error;
-use std::fmt;
+use thiserror::Error;
 
 pub(crate) const SEGMENT_BITS: u8 = 0x7F;
 pub(crate) const CONTINUE_BIT: u8 = 0x80;
 
-#[derive(Debug)]
-pub(crate) struct InvalidVarIntError;
-
-impl fmt::Display for InvalidVarIntError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "VarInt is invalid")
-    }
+#[derive(Error, Debug, PartialEq)]
+pub enum InvalidVarIntError {
+    #[error("invalid var int")]
+    VarIntTooLarge,
+    #[error("invalid var int length")]
+    InvalidVarIntLength,
 }
-
-impl Error for InvalidVarIntError {}
 
 pub(crate) fn read_var_int(bytes: &[u8], index: &mut usize) -> Result<i32, InvalidVarIntError> {
     let mut value = 0;
@@ -21,7 +17,7 @@ pub(crate) fn read_var_int(bytes: &[u8], index: &mut usize) -> Result<i32, Inval
 
     while position < 32 {
         if *index >= bytes.len() {
-            return Err(InvalidVarIntError);
+            return Err(InvalidVarIntError::InvalidVarIntLength);
         }
 
         let current_byte = bytes[*index];
@@ -36,7 +32,7 @@ pub(crate) fn read_var_int(bytes: &[u8], index: &mut usize) -> Result<i32, Inval
     }
 
     if position >= 32 {
-        return Err(InvalidVarIntError);
+        return Err(InvalidVarIntError::VarIntTooLarge);
     }
 
     Ok(value)

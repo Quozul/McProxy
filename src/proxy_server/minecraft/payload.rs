@@ -1,10 +1,19 @@
-use crate::minecraft_protocol::parse_packet::get_packet_length;
+use crate::minecraft_protocol::packets::get_packet_length::{
+    get_packet_length, PacketLengthParseError,
+};
+use thiserror::Error;
 
 pub(crate) struct Payload {
     expected_length: Option<usize>,
     bytes_received: usize,
     bytes: Vec<u8>,
     packet_start_index: usize,
+}
+
+#[derive(Error, Debug, PartialEq)]
+pub enum PayloadAppendError {
+    #[error("packet length is invalid")]
+    InvalidPacketLength,
 }
 
 impl Payload {
@@ -19,18 +28,36 @@ impl Payload {
         }
     }
 
-    pub(crate) fn append_bytes(&mut self, bytes: &[u8], length: usize) {
+    pub(crate) fn append_bytes(
+        &mut self,
+        bytes: &[u8],
+        length: usize,
+    ) -> Result<(), PayloadAppendError> {
         self.bytes.extend_from_slice(bytes);
         self.bytes_received += length;
 
         if self.expected_length.is_none() {
-            if let Ok(packet_length_result) = get_packet_length(&self.bytes.clone()) {
-                self.packet_start_index = packet_length_result.packet_start_index;
-                let total_expected_length =
-                    self.packet_start_index + packet_length_result.packet_length;
-                self.expected_length = Some(total_expected_length);
-                self.bytes.reserve(total_expected_length);
+            match get_packet_length(&self.bytes.clone()) {
+                Ok(packet_length_result) => {
+                    self.packet_start_index = packet_length_result.packet_start_index;
+                    let total_expected_length =
+                        self.packet_start_index + packet_length_result.packet_length;
+                    self.expected_length = Some(total_expected_length);
+                    self.bytes.reserve(total_expected_length);
+                    Ok(())
+                }
+                Err(err) => match err {
+                    PacketLengthParseError::IncompleteLength => Ok(()), // Ignored error
+                    PacketLengthParseError::NegativeLength => {
+                        Err(PayloadAppendError::InvalidPacketLength)
+                    }
+                    PacketLengthParseError::PacketTooLarge => {
+                        Err(PayloadAppendError::InvalidPacketLength)
+                    }
+                },
             }
+        } else {
+            Ok(())
         }
     }
 
@@ -91,13 +118,26 @@ mod tests {
     }
 
     #[test]
+    fn test_should_fail_with_negative_length() {
+        // Given
+        let mut payload = Payload::new();
+        let first_bytes = vec![0xff, 0xff, 0xff, 0xff, 0x0f];
+
+        // When
+        let result = payload.append_bytes(&first_bytes, 5);
+
+        // Then
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_read_first_length_byte() {
         // Given
         let mut payload = Payload::new();
         let first_bytes = vec![0x10];
 
         // When
-        payload.append_bytes(&first_bytes, 1);
+        payload.append_bytes(&first_bytes, 1).unwrap();
 
         // Then
         assert_eq!(payload.get_expected_length(), 17);
@@ -113,7 +153,7 @@ mod tests {
         let first_bytes = vec![0x16];
 
         // When
-        payload.append_bytes(&first_bytes, 1);
+        payload.append_bytes(&first_bytes, 1).unwrap();
 
         // Then
         assert_eq!(payload.get_expected_length(), 23);
@@ -129,7 +169,7 @@ mod tests {
         let first_bytes = vec![0x10, 0x00];
 
         // When
-        payload.append_bytes(&first_bytes, 2);
+        payload.append_bytes(&first_bytes, 2).unwrap();
 
         // Then
         assert_eq!(payload.get_expected_length(), 17);
@@ -146,8 +186,8 @@ mod tests {
         let next_bytes = vec![0x00];
 
         // When
-        payload.append_bytes(&first_bytes, 1);
-        payload.append_bytes(&next_bytes, 1);
+        payload.append_bytes(&first_bytes, 1).unwrap();
+        payload.append_bytes(&next_bytes, 1).unwrap();
 
         // Then
         assert_eq!(payload.get_expected_length(), 17);
@@ -165,7 +205,7 @@ mod tests {
         let expected_bytes = vec![0x01, 0x00];
 
         // When
-        payload.append_bytes(&first_bytes, 2);
+        payload.append_bytes(&first_bytes, 2).unwrap();
 
         // Then
         assert_eq!(payload.get_expected_length(), 2);
@@ -186,8 +226,8 @@ mod tests {
         let expected_data = vec![0x00];
 
         // When
-        payload.append_bytes(&first_bytes, 1);
-        payload.append_bytes(&next_bytes, 1);
+        payload.append_bytes(&first_bytes, 1).unwrap();
+        payload.append_bytes(&next_bytes, 1).unwrap();
 
         // Then
         assert_eq!(payload.get_expected_length(), 2);
@@ -206,8 +246,8 @@ mod tests {
         let next_bytes = vec![0xc7, 0x01];
 
         // When
-        payload.append_bytes(&first_bytes, 1);
-        payload.append_bytes(&next_bytes, 2);
+        payload.append_bytes(&first_bytes, 1).unwrap();
+        payload.append_bytes(&next_bytes, 2).unwrap();
 
         // Then
         assert_eq!(payload.get_expected_length(), 25565 + 3);
@@ -235,7 +275,7 @@ mod tests {
         // When
         for byte in localhost_handshake_packet {
             assert!(!payload.is_complete());
-            payload.append_bytes(&[byte], 1);
+            payload.append_bytes(&[byte], 1).unwrap();
         }
 
         // Then
@@ -245,7 +285,6 @@ mod tests {
         assert!(payload.is_complete());
         let payload_data = payload.get_data();
         for i in 0..expected_data.len() {
-            println!("{} == {}", payload_data[i], expected_data[i]);
             assert_eq!(payload_data[i], expected_data[i]);
         }
         assert_eq!(payload.get_packet_size(), 16);
