@@ -1,14 +1,14 @@
 use crate::minecraft_protocol::parse_packet::{parse_minecraft_packet, Packet};
 use crate::minecraft_protocol::state::State;
 use crate::proxy_server::minecraft::payload::{Payload, PayloadAppendError};
-use crate::proxy_server::proxy_connection::proxy_connection;
+use crate::proxy_server::proxy_connection::{proxy_connection, ProxyConnectionError};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, trace};
 
 pub(crate) struct Client {
     socket: TcpStream,
@@ -19,7 +19,7 @@ pub(crate) struct Client {
 
 #[derive(Error, Debug)]
 pub(crate) enum ClientReadError {
-    #[error("invalid packet received {0}")]
+    #[error("invalid packet received; error={0}")]
     InvalidPacket(PayloadAppendError),
     #[error("the client is not in an handshaking state")]
     NotInHandshakingState,
@@ -27,6 +27,16 @@ pub(crate) enum ClientReadError {
     NoBytesReceived,
     #[error("failed to read socket")]
     FailedToRead,
+}
+
+#[derive(Error, Debug)]
+pub(crate) enum RedirectError {
+    #[error("could not parse packet; error={0}")]
+    CouldNotParsePacket(Box<dyn std::error::Error>),
+    #[error("client trying to connect to unknown host {0}")]
+    UnknownHost(String),
+    #[error("{0}")]
+    ProxyError(ProxyConnectionError),
 }
 
 impl Client {
@@ -84,26 +94,31 @@ impl Client {
         self.payload.is_complete()
     }
 
-    pub(crate) async fn redirect_trafic(&mut self, hosts_ref: Arc<HashMap<String, String>>) {
-        if let Some(hostname) = self.get_hostname_from_payload() {
-            let host = hosts_ref.get(&hostname);
+    pub(crate) async fn redirect_trafic(
+        &mut self,
+        hosts_ref: Arc<HashMap<String, String>>,
+    ) -> Result<(), RedirectError> {
+        let hostname = self.get_hostname_from_payload()?;
+        let host = hosts_ref.get(&hostname);
 
-            if let Some(server_addr) = host {
-                proxy_connection(
-                    "minecraft",
-                    &mut self.socket,
-                    self.address,
-                    server_addr,
-                    Some(self.payload.get_all_bytes()),
-                )
-                .await;
-            } else {
-                warn!("Client trying to connect to unknown server host {hostname}");
-            }
+        if let Some(server_addr) = host {
+            proxy_connection(
+                "minecraft",
+                &mut self.socket,
+                self.address,
+                server_addr,
+                Some(self.payload.get_all_bytes()),
+            )
+            .await
+            .map_err(RedirectError::ProxyError)?;
+        } else {
+            return Err(RedirectError::UnknownHost(hostname));
         }
+
+        Ok(())
     }
 
-    fn get_hostname_from_payload(&mut self) -> Option<String> {
+    fn get_hostname_from_payload(&mut self) -> Result<String, RedirectError> {
         let bytes = self.payload.get_data();
         let length = self.payload.get_packet_size();
         trace!(
@@ -123,14 +138,11 @@ impl Client {
                         ..
                     } => {
                         self.update_state(next_state);
-                        Some(hostname)
+                        Ok(hostname)
                     }
                 }
             }
-            Err(err) => {
-                warn!("Could not parse Minecraft packet: {err}");
-                None
-            }
+            Err(err) => Err(RedirectError::CouldNotParsePacket(err)),
         }
     }
 }

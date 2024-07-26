@@ -1,7 +1,18 @@
 use std::net::SocketAddr;
+use thiserror::Error;
 use tokio::io::{copy_bidirectional, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{error, info};
+
+#[derive(Error, Debug)]
+pub(crate) enum ProxyConnectionError {
+    #[error("initial write failed; error={0}")]
+    InitialWriteFailed(std::io::Error),
+    #[error("failed to transfer; error={0}")]
+    FailedToTransfer(std::io::Error),
+    #[error("failed to open outbound connection; error={0}")]
+    FailedToOpenOutboundConnection(std::io::Error),
+}
 
 pub(crate) async fn proxy_connection(
     protocol: &str,
@@ -9,7 +20,7 @@ pub(crate) async fn proxy_connection(
     inbound_address: SocketAddr,
     server_addr: &str,
     initial_bytes: Option<&[u8]>,
-) {
+) -> Result<(), ProxyConnectionError> {
     info!(
         "{}:connection from {}:{} forwarded to {}",
         protocol,
@@ -17,19 +28,22 @@ pub(crate) async fn proxy_connection(
         inbound_address.port(),
         server_addr,
     );
+
     match TcpStream::connect(server_addr).await {
         Ok(mut outbound) => {
             if let Some(initial_bytes) = initial_bytes {
-                let _ = outbound.write(initial_bytes).await;
+                outbound
+                    .write(initial_bytes)
+                    .await
+                    .map_err(ProxyConnectionError::InitialWriteFailed)?;
             }
-            let _ = copy_bidirectional(inbound, &mut outbound)
+
+            copy_bidirectional(inbound, &mut outbound)
                 .await
-                .map_err(|err| {
-                    error!("Failed to transfer; error={err}");
-                });
+                .map_err(ProxyConnectionError::FailedToTransfer)?;
+
+            Ok(())
         }
-        Err(err) => {
-            error!("Failed to open outbound connection; error={err}")
-        }
+        Err(err) => Err(ProxyConnectionError::FailedToOpenOutboundConnection(err)),
     }
 }

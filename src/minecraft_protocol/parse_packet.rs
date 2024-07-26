@@ -1,5 +1,5 @@
 use crate::minecraft_protocol::packets::handshaking::handle_handshake;
-use crate::minecraft_protocol::state::{State, UnknownStateError};
+use crate::minecraft_protocol::state::State;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
@@ -44,13 +44,7 @@ pub(crate) fn parse_minecraft_packet(bytes: &[u8]) -> Result<Packet, Box<dyn std
     let packet = match packet_id {
         0x00 => {
             let handshake = handle_handshake(bytes, &mut index)?;
-            let next_state = match handshake.next_state {
-                0 => Ok(State::Handshake),
-                1 => Ok(State::Status),
-                2 => Ok(State::Login),
-                3 => Ok(State::Transfer),
-                _ => Err(UnknownStateError),
-            }?;
+            let next_state = State::parse(handshake.next_state)?;
 
             Ok(Packet::Handshake {
                 protocol: handshake.protocol,

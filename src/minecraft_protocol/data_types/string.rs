@@ -3,7 +3,7 @@ use std::error::Error;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[error("Invalid string size error")]
+#[error("invalid string size error")]
 pub(crate) struct InvalidStringSizeError;
 
 pub(crate) fn read_string(bytes: &[u8], index: &mut usize) -> Result<String, Box<dyn Error>> {

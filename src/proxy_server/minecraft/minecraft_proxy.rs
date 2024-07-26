@@ -31,7 +31,9 @@ pub(crate) async fn start_minecraft_proxy(
                 }
             }
 
-            client.redirect_trafic(hosts_ref).await;
+            if let Err(err) = client.redirect_trafic(hosts_ref).await {
+                error!("{err}");
+            }
         });
     }
 

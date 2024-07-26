@@ -21,9 +21,9 @@ pub(crate) fn enable_logging(verbose: u8) {
         }
         // journald is typically available on Linux systems, but nowhere else. Portable software
         // should handle its absence gracefully.
-        Err(e) => {
+        Err(err) => {
             registry.init();
-            error!("couldn't connect to journald: {}", e);
+            error!("could not connect to journald; error={err}");
         }
     }
 }

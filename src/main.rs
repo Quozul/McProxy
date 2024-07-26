@@ -44,14 +44,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     tokio::spawn(async move {
                         let proxy = start_minecraft_proxy(listen, Arc::new(hosts)).await;
                         if let Err(err) = proxy {
-                            error!("Error with Minecraft proxy: {err}");
+                            error!("error with Minecraft proxy; error={err}");
                         }
                     })
                 }
                 Servers::Tcp { listen, redirect } => tokio::spawn(async move {
                     let proxy = start_tcp_proxy(&listen, redirect).await;
                     if let Err(err) = proxy {
-                        error!("Error with Minecraft proxy: {err}");
+                        error!("error with TCP proxy; error={err}");
                     }
                 }),
             });
@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             futures::future::join_all(servers).await;
         }
         Err(err) => {
-            error!("Error while reading configuration: {err}");
+            error!("error while reading configuration; error={err}");
         }
     }
 

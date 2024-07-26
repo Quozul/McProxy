@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[error("unknown state")]
-pub(crate) struct UnknownStateError;
+#[error("unknown state {0}")]
+pub(crate) struct UnknownStateError(i32);
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum State {
@@ -12,8 +12,6 @@ pub(crate) enum State {
     Status,
     Login,
     Transfer,
-    //Configuration,
-    //Play,
 }
 
 impl Display for State {
@@ -23,6 +21,18 @@ impl Display for State {
             State::Status => f.write_str("Status"),
             State::Login => f.write_str("Login"),
             State::Transfer => f.write_str("Transfer"),
+        }
+    }
+}
+
+impl State {
+    pub(crate) fn parse(state: i32) -> Result<Self, UnknownStateError> {
+        match state {
+            0 => Ok(State::Handshake),
+            1 => Ok(State::Status),
+            2 => Ok(State::Login),
+            3 => Ok(State::Transfer),
+            _ => Err(UnknownStateError(state)),
         }
     }
 }
