@@ -25,8 +25,8 @@ pub(crate) enum ClientReadError {
     NotInHandshakingState,
     #[error("no bytes received from the client")]
     NoBytesReceived,
-    #[error("failed to read socket")]
-    FailedToRead,
+    #[error("failed to read socket; error={0}")]
+    FailedToRead(std::io::Error),
 }
 
 #[derive(Error, Debug)]
@@ -64,7 +64,7 @@ impl Client {
             .socket
             .read(&mut buf)
             .await
-            .map_err(|_| ClientReadError::FailedToRead)?;
+            .map_err(ClientReadError::FailedToRead)?;
 
         if bytes_received == 0 {
             return Err(ClientReadError::NoBytesReceived);

@@ -47,5 +47,8 @@ redirect = "127.0.0.1:80"
    ```
 4. Read the logs:
    ```shell
+   # View all logs and follow for new ones
    journalctl --follow --unit=proxy
+   # View only error logs
+   journalctl --unit=proxy --priority=4 --pager-end
    ```
