@@ -1,9 +1,9 @@
 use std::error::Error;
 use std::string::String;
 
-use crate::minecraft_protocol::data_types::string::read_string;
-use crate::minecraft_protocol::data_types::unsigned_short::read_unsigned_short;
-use crate::minecraft_protocol::data_types::var_int::read_var_int;
+use crate::backends::minecraft::protocol::data_types::string::read_string;
+use crate::backends::minecraft::protocol::data_types::unsigned_short::read_unsigned_short;
+use crate::backends::minecraft::protocol::data_types::var_int::read_var_int;
 
 #[derive(Debug)]
 pub(crate) struct McHandshake {

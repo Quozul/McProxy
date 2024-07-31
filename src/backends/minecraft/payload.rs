@@ -1,4 +1,4 @@
-use crate::minecraft_protocol::packets::get_packet_length::{
+use crate::backends::minecraft::protocol::packets::get_packet_length::{
     get_packet_length, PacketLengthParseError,
 };
 use thiserror::Error;

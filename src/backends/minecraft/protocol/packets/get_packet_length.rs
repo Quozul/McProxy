@@ -1,4 +1,4 @@
-use crate::minecraft_protocol::data_types::var_int::{read_var_int, InvalidVarIntError};
+use crate::backends::minecraft::protocol::data_types::var_int::{read_var_int, InvalidVarIntError};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]

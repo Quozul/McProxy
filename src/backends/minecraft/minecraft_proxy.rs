@@ -4,9 +4,9 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{debug, error, info};
 
-use crate::proxy_server::minecraft::client::Client;
+use crate::backends::minecraft::client::Client;
 
-pub(crate) async fn start_minecraft_proxy(
+pub(crate) async fn listen(
     addr: String,
     hosts: Arc<HashMap<String, String>>,
 ) -> Result<(), Box<dyn Error>> {

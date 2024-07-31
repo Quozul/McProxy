@@ -1,5 +1,5 @@
-use crate::minecraft_protocol::packets::handshaking::handle_handshake;
-use crate::minecraft_protocol::state::State;
+use crate::backends::minecraft::protocol::packets::handshaking::handle_handshake;
+use crate::backends::minecraft::protocol::state::State;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;

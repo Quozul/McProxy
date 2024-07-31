@@ -1,20 +1,16 @@
-use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Arc;
 
 use clap::Parser;
 use tracing::error;
 
-use proxy_server::minecraft::minecraft_proxy::start_minecraft_proxy;
+use crate::backends::minecraft::start_minecraft_proxy;
+use backends::tcp::start_tcp_proxy;
+use configuration::{read_config, Servers};
+use logging::enable_logging;
 
-use crate::configuration::{read_config, Servers};
-use crate::logging::enable_logging;
-use crate::proxy_server::tcp::tcp_proxy::start_tcp_proxy;
-
+mod backends;
 mod configuration;
 mod logging;
-mod minecraft_protocol;
-mod proxy_server;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -36,24 +32,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     match config {
         Ok(config) => {
             let servers = config.servers.iter().cloned().map(|server| match server {
-                Servers::Minecraft { listen, hosts } => {
-                    let hosts = hosts
-                        .into_iter()
-                        .map(|host| (host.hostname, host.target))
-                        .collect::<HashMap<String, String>>();
-                    tokio::spawn(async move {
-                        let proxy = start_minecraft_proxy(listen, Arc::new(hosts)).await;
-                        if let Err(err) = proxy {
-                            error!("error with Minecraft proxy; error={err}");
-                        }
-                    })
-                }
-                Servers::Tcp { listen, redirect } => tokio::spawn(async move {
-                    let proxy = start_tcp_proxy(&listen, redirect).await;
-                    if let Err(err) = proxy {
-                        error!("error with TCP proxy; error={err}");
-                    }
-                }),
+                Servers::Minecraft { listen, hosts } => start_minecraft_proxy(listen, hosts),
+                Servers::Tcp { listen, redirect } => start_tcp_proxy(listen, redirect),
             });
 
             futures::future::join_all(servers).await;

@@ -1,4 +1,4 @@
-use crate::minecraft_protocol::data_types::var_int::{read_var_int, CONTINUE_BIT};
+use crate::backends::minecraft::protocol::data_types::var_int::{read_var_int, CONTINUE_BIT};
 use std::error::Error;
 use thiserror::Error;
 

@@ -1,11 +1,11 @@
 use std::error::Error;
 
-use crate::proxy_server::proxy_connection::proxy_connection;
+use crate::backends::proxy_connection::proxy_connection;
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
 pub(crate) async fn start_tcp_proxy(
-    listen_address: &str,
+    listen_address: String,
     server_address: String,
 ) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(&listen_address).await?;

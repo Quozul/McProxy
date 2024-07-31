@@ -1,7 +1,7 @@
-use crate::minecraft_protocol::parse_packet::{parse_minecraft_packet, Packet};
-use crate::minecraft_protocol::state::State;
-use crate::proxy_server::minecraft::payload::{Payload, PayloadAppendError};
-use crate::proxy_server::proxy_connection::{proxy_connection, ProxyConnectionError};
+use crate::backends::minecraft::payload::{Payload, PayloadAppendError};
+use crate::backends::minecraft::protocol::parse_packet::{parse_minecraft_packet, Packet};
+use crate::backends::minecraft::protocol::state::State;
+use crate::backends::proxy_connection::{proxy_connection, ProxyConnectionError};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
